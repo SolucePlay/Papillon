@@ -15,18 +15,17 @@ import Icon from "@/ui/components/Icon";
 import AnimatedPressable from "@/ui/components/AnimatedPressable";
 import Course from "@/ui/components/Course";
 import { NativeHeaderHighlight, NativeHeaderPressable, NativeHeaderSide, NativeHeaderTitle } from "@/ui/components/NativeHeader";
-import { FadeInUp, FadeOutUp, LinearTransition } from "react-native-reanimated";
+import Reanimated, { FadeInUp, FadeOutUp, LinearTransition } from "react-native-reanimated";
 import { Animation } from "@/ui/utils/Animation";
 import { Dynamic } from "@/ui/components/Dynamic";
 import { useTheme } from "@react-navigation/native";
 import adjust from "@/utils/adjustColor";
 
-import Reanimated from "react-native-reanimated";
 import { CompactGrade } from "@/ui/components/CompactGrade";
 import { log, warn } from "@/utils/logger/logger";
 
 import { CourseStatus, Course as SharedCourse } from "@/services/shared/timetable";
-import { getWeekNumberFromDate } from "@/database/useHomework";
+import { getHomeworksFromCache, getWeekNumberFromDate, updateHomeworkIsDone } from "@/database/useHomework";
 import { getSubjectColor } from "@/utils/subjects/colors";
 import { getStatusText } from "../calendar";
 import { runsIOS26 } from "@/ui/utils/IsLiquidGlass";
@@ -37,12 +36,16 @@ import { PapillonAppearIn, PapillonAppearOut } from "@/ui/utils/Transition";
 import { useAlert } from "@/ui/components/AlertProvider";
 import { getCurrentPeriod } from "@/utils/grades/helper/period";
 import GradesWidget from "./widgets/Grades";
-import { Pattern } from "@/ui/components/Pattern/Pattern";
+import { AvailablePatterns, Pattern } from "@/ui/components/Pattern/Pattern";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTimetable } from "@/database/useTimetable";
-import { on } from "events";
 import { checkConsent } from "@/utils/logger/consent";
 import { useSettingsStore } from "@/stores/settings";
+import { Homework } from "@/services/shared/homework";
+import { getSubjectName } from "@/utils/subjects/name";
+import { generateId } from "@/utils/generateId";
+import CompactTask from "@/ui/components/CompactTask";
+import { removeAllDuplicates } from "@/database/DatabaseProvider";
 
 const IndexScreen = () => {
   const now = new Date();
@@ -95,6 +98,7 @@ const IndexScreen = () => {
       }
 
     } catch (error) {
+      if (String(error).includes("Unable to find")) return;
       alert.showAlert({
         title: "Connexion impossible",
         description: "Il semblerait que ta session a expiré. Tu pourras renouveler ta session dans les paramètres en liant à nouveau ton compte.",
@@ -116,6 +120,39 @@ const IndexScreen = () => {
     const weekNumber = getWeekNumberFromDate(date)
     await manager.getWeeklyTimetable(weekNumber)
   }, []);
+
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [freshHomeworks, setFreshHomeworks] = useState<Record<string, Homework>>({});
+  const [homeworks, setHomeworks] = useState<Homework[]>([]);
+
+  const fetchHomeworks = useCallback(async () => {
+    const manager = getManager();
+    const current = await manager.getHomeworks(weekNumber);
+    const next = await manager.getHomeworks(weekNumber + 1);
+    const result = [...current, ...next]
+    const newHomeworks: Record<string, Homework> = {};
+    for (const hw of result) {
+      const id = generateId(hw.subject + hw.content + hw.createdByAccount);
+      newHomeworks[id] = hw;
+    }
+    setFreshHomeworks(newHomeworks);
+    setRefreshTrigger(prev => prev + 1);
+  }, [weekNumber]);
+
+  async function setHomeworkAsDone(homework: Homework) {
+    const manager = getManager();
+    const id = generateId(homework.subject + homework.content + homework.createdByAccount);
+    await manager.setHomeworkCompletion(homework, !homework.isDone);
+    updateHomeworkIsDone(id, !homework.isDone)
+    setRefreshTrigger(prev => prev + 1);
+    setFreshHomeworks(prev => ({
+      ...prev,
+      [id]: {
+        ...prev[id],
+        isDone: !homework.isDone,
+      }
+    }));
+  }
 
   const fetchGrades = useCallback(async () => {
     const manager = getManager();
@@ -146,16 +183,42 @@ const IndexScreen = () => {
   }, [])
 
   useEffect(() => {
-    date.setUTCHours(0, 0, 0, 0);
+    const fetchHomeworksFromCache = async () => {
+      const currentWeekHomeworks = await getHomeworksFromCache(weekNumber);
+      const nextWeekHomeworks = await getHomeworksFromCache(weekNumber + 1);
+      const fullHomeworks = [...currentWeekHomeworks, ...nextWeekHomeworks];
 
-    const dayCourse = weeklyTimetable.find(day => day.date.getTime() === date.getTime())?.courses ?? [];
-    setCourses(dayCourse.filter(course => course.from.getTime() > date.getTime()));
+      // get the closest due date from now
+      const sortedHomeworks = fullHomeworks.sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+      // Filter done homeworks
+      const filteredHomeworks = sortedHomeworks.filter(hw => !hw.isDone).length > 0 ? sortedHomeworks.filter(hw => !hw.isDone) : sortedHomeworks;
+      // Take the first 3 homeworks
+      const splicedHomeworks = filteredHomeworks.splice(0, 3);
+      setHomeworks(splicedHomeworks);
+    };
+    fetchHomeworksFromCache();
+  }, [refreshTrigger])
+
+  useEffect(() => {
+    const fetchData = async () => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      let dayCourse = weeklyTimetable.find(day => day.date.getTime() === today.getTime())?.courses ?? [];
+
+      dayCourse = dayCourse.filter(course => course.to.getTime() > Date.now());
+
+      setCourses(dayCourse);
+    };
+    fetchData();
   }, [weeklyTimetable]);
+
 
   useEffect(() => {
     const unsubscribe = subscribeManagerUpdate((_) => {
       fetchEDT()
       fetchGrades()
+      fetchHomeworks()
     });
 
     return () => unsubscribe();
@@ -190,13 +253,8 @@ const IndexScreen = () => {
     setFullyScrolled(isFullyScrolled);
   }, []);
 
-
-  if (accounts.length === 0) {
-    router.replace("/(onboarding)/welcome");
-    return null
-  }
-
   useEffect(() => {
+    removeAllDuplicates()
     if (accounts.length > 0) {
       checkConsent().then(consent => {
         if (!consent.given) {
@@ -205,6 +263,43 @@ const IndexScreen = () => {
       });
     }
   }, []);
+
+  const MagicTaskWrapper = useCallback(({ item }: { item: Homework }) => {
+    const description = item.content.replace(/<[^>]*>/g, "");
+    const dueDate = new Date(item.dueDate);
+    const inFresh = freshHomeworks[item.id]
+
+    return (
+      <CompactTask
+        fromCache={false}
+        setHomeworkAsDone={() => setHomeworkAsDone(inFresh)}
+        ref={item}
+        subject={getSubjectName(item.subject)}
+        color={getSubjectColor(item.subject)}
+        description={description}
+        emoji={getSubjectEmoji(item.subject)}
+        dueDate={dueDate}
+        done={item.isDone}
+      />
+
+    );
+  }, [freshHomeworks]);
+
+  const getScheduleMessage = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const todayAllCourses = weeklyTimetable.find(day => day.date.getTime() === today.getTime())?.courses ?? [];
+
+    const remainingToday = courses.length;
+    if (remainingToday === 0) {
+      return todayAllCourses.length > 0 ? t("Home_Planned_Finished") : t("Home_Planned_None");
+    } else if (remainingToday === 1) {
+      return t("Home_Planned_One");
+    } else {
+      return t("Home_Planned_Number", { number: remainingToday });
+    }
+  };
 
   const headerItems = [
     (
@@ -224,14 +319,17 @@ const IndexScreen = () => {
           </Typography>
         </Dynamic>
         <Typography variant="body1" color={foregroundSecondary}>
-          {courses.length == 0 ? t("Home_Planned_None")
-            : courses.length == 1 ? t("Home_Planned_One")
-              : t("Home_Planned_Number", { number: courses.length })}
+          {getScheduleMessage()}
         </Typography>
       </Stack>
     ),
     <GradesWidget header accent={foreground} />,
   ];
+
+  if (accounts.length === 0) {
+    router.replace("/(onboarding)/welcome");
+    return null;
+  }
 
   return (
     <>
@@ -240,8 +338,9 @@ const IndexScreen = () => {
         locations={[0, 0.5]}
         style={{ position: "absolute", top: 0, left: 0, right: 0, height: "100%" }}
       />
+
       <Pattern
-        pattern={"cross"}
+        pattern={AvailablePatterns.CROSS}
         width={"100%"}
         height={250 + insets.top}
         color={foreground}
@@ -284,7 +383,8 @@ const IndexScreen = () => {
               style={{
                 backgroundColor: "transparent",
                 borderCurve: "continuous",
-                paddingBottom: 12
+                paddingBottom: 12,
+                marginTop: -10,
               }}
               horizontal
               data={headerItems}
@@ -309,7 +409,8 @@ const IndexScreen = () => {
                     flex: 1,
                     overflow: "hidden",
                     alignItems: "center",
-                    justifyContent: "center"
+                    justifyContent: "center",
+                    marginTop: 10,
                   }}
                 >
                   {item}
@@ -354,17 +455,17 @@ const IndexScreen = () => {
             redirect: "/changelog",
             buttonLabel: "En savoir plus"
           },
-          courses.length > 0 && {
+          courses.filter(item => item.to.getTime() > Date.now()).length > 0 && {
             icon: <Papicons name={"Calendar"} />,
             title: t("Home_Widget_NextCourses"),
             redirect: "(tabs)/calendar",
             render: () => (
               <Stack padding={12} gap={4} style={{ paddingBottom: 6 }}>
-                {courses.slice(0, 2).map(item => (
+                {courses.filter(item => item.to.getTime() > Date.now()).slice(0, 2).map(item => (
                   <Course
                     key={item.id}
                     id={item.id}
-                    name={item.subject}
+                    name={getSubjectName(item.subject)}
                     teacher={item.teacher}
                     room={item.room}
                     color={getSubjectColor(item.subject)}
@@ -373,6 +474,7 @@ const IndexScreen = () => {
                     start={Math.floor(item.from.getTime() / 1000)}
                     end={Math.floor(item.to.getTime() / 1000)}
                     readonly={!!item.createdByAccount}
+                    compact={true}
                     onPress={() => {
                       (navigation as any).navigate('(modals)/course', {
                         course: item,
@@ -387,6 +489,34 @@ const IndexScreen = () => {
                   />
                 ))}
               </Stack>
+            )
+          },
+          homeworks.length > 0 && {
+            icon: <Papicons name={"Tasks"} />,
+            title: "Tâches",
+            redirect: "/(tabs)/tasks",
+            buttonLabel: homeworks.length > 3 ? `${(homeworks.length) - 3}+ autres tâches` : `Voir toutes les tâches`,
+            render: () => (
+              <FlatList
+                showsVerticalScrollIndicator={false}
+                style={{
+                  borderBottomLeftRadius: 26,
+                  borderBottomRightRadius: 26,
+                  overflow: "hidden",
+                  width: "100%",
+                  padding: 10,
+                  paddingHorizontal: 10,
+                  gap: 10
+                }}
+                contentContainerStyle={{
+                  gap: 12
+                }}
+                data={homeworks.slice(0, 3)}
+                keyExtractor={(item, index) => item.id + index}
+                renderItem={({ item }) => (
+                  <MagicTaskWrapper item={item} />
+                )}
+              />
             )
           },
           grades.length > 0 && {
@@ -442,6 +572,13 @@ const IndexScreen = () => {
           },
           {
             icon: <Papicons name={"Butterfly"} />,
+            title: "Onboarding",
+            redirect: "/(onboarding)/welcome",
+            buttonLabel: "Aller",
+            dev: true
+          },
+          {
+            icon: <Papicons name={"Butterfly"} />,
             title: "Devmode",
             redirect: "/devmode",
             buttonLabel: "Aller",
@@ -468,7 +605,7 @@ const IndexScreen = () => {
               layout={Animation(LinearTransition, "list")}
             >
               <Stack card radius={26}>
-                <Stack direction="horizontal" hAlign="center" padding={12} gap={10} style={{ paddingBottom: item.render ? 0 : undefined, marginTop: -1, height: item.render ? 44 : 56 }}>
+                <Stack direction="horizontal" vAlign="center" hAlign="center" padding={12} gap={10} style={{ paddingBottom: item.render ? 0 : undefined, marginTop: -1, height: item.render ? 44 : 56 }}>
                   <Icon papicon opacity={0.6} style={{ marginLeft: 4 }}>
                     {item.icon}
                   </Icon>

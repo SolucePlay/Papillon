@@ -1,12 +1,9 @@
 import Stack from "@/ui/components/Stack";
 import Typography from "@/ui/components/Typography";
-import Button from "@/ui/components/Button";
-import { useHeaderHeight } from "@react-navigation/elements";
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Image, Pressable, Linking } from "react-native";
+import { View, StyleSheet, ScrollView, Image, Linking } from "react-native";
 import i18n from "@/utils/i18n";
 const t = i18n.t.bind(i18n);
-import { MMKV } from "react-native-mmkv";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AnimatedPressable from "@/ui/components/AnimatedPressable";
 import { Papicons } from "@getpapillon/papicons";
@@ -17,6 +14,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import List from "@/ui/components/List";
 import Icon from "@/ui/components/Icon";
 import Item from "@/ui/components/Item";
+import Button from "@/ui/components/Button";
 
 export default function ConsentScreen() {
   const insets = useSafeAreaInsets();
@@ -202,28 +200,19 @@ export default function ConsentScreen() {
           gap: 12,
         }}
       >
-        <AnimatedPressable
-          style={{
-            width: "100%",
-            padding: 12,
-            borderRadius: 80,
-            borderCurve: 'continuous',
-            backgroundColor: currentConsent ? accent : "transparent",
-            borderColor: colors.border,
-            borderWidth: currentConsent ? 0 : 1,
-            alignItems: "center",
-            justifyContent: "center",
-            flexDirection: "row",
-            gap: 8,
-          }}
-          disabled={!currentConsent}
+        <Button
+          disabled={currentConsent === null}
           onPress={() => { if (currentConsent) saveConsentState(currentConsent) }}
-        >
-          <Papicons name={currentConsent === "none" ? "cross" : "check"} color={currentConsent ? "#FFFFFF" : colors.text + "44"} />
-          <Typography color={currentConsent ? "#FFFFFF" : colors.text + "44"} variant="button">
-            {currentConsent === "none" ? t("Consent_Refuse") : t("Consent_Accept")}
-          </Typography>
-        </AnimatedPressable>
+          inline
+          style={{
+            backgroundColor: currentConsent === "none" ? colors.text + "99" : accent,
+          }}
+          icon={
+            <Papicons name={currentConsent === "none" ? "cross" : "check"} color="#FFFFFF" />
+          }
+          title={currentConsent === "none" ? t("Consent_Refuse") : t("Consent_Accept")}
+        />
+
         <Typography variant="caption" color="secondary" align="center">
           {t("Consent_ChangeMind")}
         </Typography>

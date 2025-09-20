@@ -4,7 +4,7 @@ import { useTheme } from "@react-navigation/native";
 import { router, useRouter } from "expo-router";
 import { t } from "i18next";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Image, Platform, Pressable, View } from "react-native";
+import { Alert, Image, Platform, Pressable, View } from "react-native";
 import Reanimated, {
   FadeInUp,
   FadeOutUp,
@@ -69,9 +69,14 @@ function Tabs() {
       icon: TextBubble,
       title: t("Profile_Discussions_Title"),
       unread: discussion.length,
+      disabled: true,
+      beta: true,
       denominator: t("Profile_Discussions_Denominator_Single"),
       denominator_plural: t("Profile_Discussions_Denominator_Plural"),
       color: "#0094C5",
+      onPress: () => {
+        Alert.alert("Ça arrive bientôt ! 😉", "On travaille activement pour vous apporter cette fonctionnalité.");
+      },
     },
   ], [attendances]);
 
@@ -140,10 +145,10 @@ function Tabs() {
             padding={16}
             height={58}
             radius={200}
-            backgroundColor={tab.unread > 0 ? adjust(tab.color, getTabBackground()) : colors.card}
+            backgroundColor={tab.disabled ? colors.text + 10 : tab.unread > 0 ? adjust(tab.color, getTabBackground()) : colors.card}
           >
             <Icon papicon
-              fill={tab.unread > 0 ? tab.color : colors.text}
+              fill={tab.disabled ? colors.text + 40 : tab.unread > 0 ? tab.color : colors.text}
             >
               <tab.icon />
             </Icon>
@@ -154,12 +159,21 @@ function Tabs() {
             >
               <Typography inline
                 variant="title"
-                color={tab.unread > 0 ? tab.color : colors.text}
+                color={tab.disabled ? colors.text + 40 : tab.unread > 0 ? tab.color : colors.text}
               >{tab.title}</Typography>
               <Typography inline
                 variant="caption"
-                color={tab.unread > 0 ? tab.color : "secondary"}
-              >{tab.unread > 0 ? `${tab.unread} ${tab.unread > 1 ? tab.denominator_plural : tab.denominator}` : "Ouvrir"}</Typography>
+                color={tab.disabled ? colors.text + 40 : tab.unread > 0 ? tab.color : "secondary"}
+              >
+                {tab.beta ? (
+                  "Ça arrive !"
+                ) : tab.unread > 0 ? (
+                  `${tab.unread} ${tab.unread > 1 ? tab.denominator_plural : tab.denominator}`
+                ) : (
+                  "Ouvrir"
+                )}
+
+              </Typography>
             </Stack>
           </Stack>
         </AnimatedPressable>
@@ -172,6 +186,10 @@ function NewsSection() {
   const theme = useTheme();
 
   const news = useNews();
+
+  const limitNews = useMemo(() => {
+    return news.slice(0, 3);
+  }, [news]);
 
   const fetchNews = useCallback(() => {
     try {
@@ -258,7 +276,7 @@ function NewsSection() {
               inline
               color={adjust("#7DBB00", -0.3)}
             >
-              {news.filter(news => !news.acknowledged).length > 0 ? news.filter(news => !news.acknowledged).length + news.filter(news => !news.acknowledged).length > 1 ? t("Profile_News_Denominator_Plural") : t("Profile_News_Denominator_Single") : t("Profile_News_Open")}
+              {limitNews.filter(news => !news.acknowledged).length > 0 ? news.filter(news => !news.acknowledged).length + news.filter(news => !news.acknowledged).length > 1 ? t("Profile_News_Denominator_Plural") : t("Profile_News_Denominator_Single") : t("Profile_News_Open")}
             </Typography>
             <Icon papicon
               size={20}
@@ -272,7 +290,7 @@ function NewsSection() {
       <List marginBottom={0}
         radius={24}
       >
-        {news.map((item, index) => (
+        {limitNews.map((item, index) => (
           <Item
             key={index}
             onPress={() => {
@@ -311,7 +329,7 @@ function Cards() {
       entering={Platform.OS === "android" ? undefined : PapillonAppearIn}
       exiting={Platform.OS === "android" ? undefined : PapillonAppearOut}
     >
-      <Pressable onPress={() => {
+      <AnimatedPressable onPress={() => {
         router.push("/(features)/(cards)/cards");
       }}
       >
@@ -362,7 +380,7 @@ function Cards() {
             />
           </View>
         </Stack>
-      </Pressable>
+      </AnimatedPressable>
     </Reanimated.View>
   );
 }

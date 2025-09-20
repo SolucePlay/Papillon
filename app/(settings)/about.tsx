@@ -190,9 +190,9 @@ export default function SettingsAbout() {
       </List>
       <List>
         {contributors.map(item => (
-          <Item key={item.login}>
+          <Item key={item.login} onPress={() => Linking.openURL(item.html_url)}>
             <Leading>
-              <Avatar size={40} squared author={item.login} imageURL={item.avatar_url} />,
+              <Avatar size={40} squared author={item.login} imageURL={item.avatar_url} />
             </Leading>
             <Typography>{item.login}</Typography>
             <Typography color="secondary">{item.contributions} contributions</Typography>
