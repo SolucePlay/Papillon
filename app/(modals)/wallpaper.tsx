@@ -11,6 +11,7 @@ import { File, Directory, Paths } from 'expo-file-system';
 import ActivityIndicator from "@/components/ActivityIndicator"
 import { NativeHeaderPressable, NativeHeaderSide } from "@/ui/components/NativeHeader"
 import Icon from "@/ui/components/Icon"
+import { router } from "expo-router";
 import { Papicons } from "@getpapillon/papicons"
 import { MenuView } from "@react-native-menu/menu"
 
@@ -121,18 +122,24 @@ const WallpaperModal = () => {
       }).then((result) => {
         if (result.canceled) return;
 
-        const file = result.assets[0];
+        const asset = result.assets[0];
+        const sourceFile = new File(asset.uri);
 
-        const importedFile = new File(file);
-        importedFile.copy(wallpaperDirectory);
-        importedFile.rename(`custom:${Date.now()}.jpg`);
+        if (!wallpaperDirectory.exists) {
+          wallpaperDirectory.create();
+        }
+
+        const newFileName = `custom:${Date.now()}.jpg`;
+        const destFile = new File(wallpaperDirectory, newFileName);
+
+        sourceFile.copy(destFile);
 
         mutateProperty("personalization", {
           wallpaper: {
             id: `custom:${Date.now()}`,
             path: {
-              directory: importedFile.parentDirectory?.name,
-              name: importedFile.name
+              directory: wallpaperDirectory.name,
+              name: destFile.name
             }
           }
         })
@@ -152,7 +159,7 @@ const WallpaperModal = () => {
         }}
         contentContainerStyle={{
           gap: 16,
-          paddingTop: 72
+          paddingTop: Platform.OS === 'android' ? 20 : 72
         }}
         renderItem={({ item, index }) => (
           <View>
@@ -204,15 +211,30 @@ const WallpaperModal = () => {
         }
       />
 
-      <NativeHeaderSide side="Left" key={currentWallpaper?.id + ":" + "upload:" + hasCustomWallpaper ? "true" : "false"}>
-        <NativeHeaderPressable onPress={() => uploadCustomWallpaper()}>
-          <Icon size={28} fill={hasCustomWallpaper ? colors.primary : undefined}>
-            <Papicons name="Gallery" />
-          </Icon>
-        </NativeHeaderPressable>
+      <NativeHeaderSide side="Left" key={currentWallpaper?.id + ":" + "upload:" + (hasCustomWallpaper ? "true" : "false")}>
+        {Platform.OS === 'android' ? (
+          <NativeHeaderPressable onPress={() => router.back()}>
+            <Icon size={28}>
+              <Papicons name="Cross" />
+            </Icon>
+          </NativeHeaderPressable>
+        ) : (
+          <NativeHeaderPressable onPress={() => uploadCustomWallpaper()}>
+            <Icon size={28} fill={hasCustomWallpaper ? colors.primary : undefined}>
+              <Papicons name="Gallery" />
+            </Icon>
+          </NativeHeaderPressable>
+        )}
       </NativeHeaderSide>
 
       <NativeHeaderSide side="Right" key={currentWallpaper?.id + ":" + wallpaperDirectory.exists}>
+        {Platform.OS === 'android' && (
+          <NativeHeaderPressable onPress={() => uploadCustomWallpaper()}>
+            <Icon size={28} fill={hasCustomWallpaper ? colors.primary : undefined}>
+              <Papicons name="Gallery" />
+            </Icon>
+          </NativeHeaderPressable>
+        )}
         <MenuView
           actions={[
             {
