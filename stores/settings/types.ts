@@ -28,6 +28,7 @@ export interface Wallpaper {
 export interface Personalization {
   colorSelected?: Colors;
   theme?: "light" | "dark" | "auto";
+  useMaterialYou?: boolean;
   magicEnabled?: boolean;
   hideNameOnHomeScreen?: boolean;
   showAlertAtLogin?: boolean;
@@ -36,4 +37,8 @@ export interface Personalization {
   language?: string | null;
   wallpaper?: Wallpaper;
   disabledTabs?: string[];
+  gradesSortMethod?: string;
+  gradesPeriodId?: string;
+  installedVersion?: string;
+  releaseNotesSeenForVersion?: string;
 }
