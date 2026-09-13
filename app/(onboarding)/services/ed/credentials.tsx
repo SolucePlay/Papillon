@@ -1,6 +1,6 @@
 
 import { Client, DoubleAuthQuestions, DoubleAuthResult, Require2FA } from "@blockshub/blocksdirecte";
-import { useTheme } from "@react-navigation/native";
+import { useTheme, useHeaderHeight } from "expo-router/react-navigation";
 import { router } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -34,7 +34,6 @@ import Typography from "@/ui/components/Typography";
 import uuid from "@/utils/uuid/uuid";
 import { ScrollView } from "react-native-gesture-handler";
 import LoginView from "../../components/LoginView";
-import { useHeaderHeight } from "@react-navigation/elements";
 
 const ANIMATION_DURATION = 170;
 export const PlatformPressable = Platform.OS === 'android' ? Pressable : AnimatedPressable;
@@ -144,11 +143,11 @@ export default function EDLoginWithCredentials() {
     }
   }
 
-  const loginED = async () => {
-    if (!username.trim() || !password.trim()) { return; }
+  const loginED = async (submittedUsername = username, submittedPassword = password) => {
+    if (!submittedUsername.trim() || !submittedPassword.trim()) { return; }
     setIsLoggingIn(true);
     Keyboard.dismiss();
-    await handleLogin(username, password);
+    await handleLogin(submittedUsername, submittedPassword);
     setIsLoggingIn(false);
   };
 
@@ -216,21 +215,24 @@ export default function EDLoginWithCredentials() {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, marginBottom: insets.bottom }} behavior="padding">
-      <ScrollView contentContainerStyle={{ paddingTop: finalHeaderHeight, paddingBottom: insets.bottom }}>
-              <LoginView
-                color="#1788bc"
-                serviceName="ÉcoleDirecte"
-                serviceIcon={require('@/assets/images/service_ed.png')}
-                loading={isLoggingIn}
-                onSubmit={(values) => {
-                  if (!isLoggingIn && values.username && values.password) {
-                    setUsername(values.username);
-                    setPassword(values.password);
-                    loginED();
-                  }
-                }}
-              />
-            </ScrollView>
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingTop: finalHeaderHeight, paddingBottom: insets.bottom }}
+      >
+        <LoginView
+          color="#1788bc"
+          serviceName="ÉcoleDirecte"
+          serviceIcon={require('@/assets/images/service_ed.png')}
+          loading={isLoggingIn}
+          onSubmit={(values) => {
+            if (!isLoggingIn && values.username && values.password) {
+              setUsername(values.username);
+              setPassword(values.password);
+              loginED(values.username, values.password);
+            }
+          }}
+        />
+      </ScrollView>
 
       <Modal
         visible={challengeModalVisible}

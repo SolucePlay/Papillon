@@ -1,7 +1,6 @@
 import { Papicons } from "@getpapillon/papicons";
 import { MenuView, NativeActionEvent } from "@react-native-menu/menu";
-import { useHeaderHeight } from "@react-navigation/elements";
-import { useTheme } from "@react-navigation/native";
+import { useHeaderHeight, useTheme } from "expo-router/react-navigation";
 import * as ImagePicker from "expo-image-picker"
 import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
@@ -49,7 +48,7 @@ export default function CustomProfileScreen() {
 
   const updateProfilePictureFromLibrary = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images', 'videos'],
+      mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [4, 3],
       quality: 1,

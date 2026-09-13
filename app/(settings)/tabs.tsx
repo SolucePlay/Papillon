@@ -1,20 +1,27 @@
 import { Papicons } from "@getpapillon/papicons";
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { Switch } from "react-native";
 
 import { useSettingsStore } from "@/stores/settings";
+import { useAccountStore } from "@/stores/account";
 import Icon from "@/ui/components/Icon";
 import List from "@/ui/new/List";
 import Typography from "@/ui/new/Typography";
+import NativeSwitch from "@/ui/native/NativeSwitch";
+import { useTheme } from "expo-router/react-navigation";
 
 const SettingsTabs = () => {
   const { t } = useTranslation();
+  const { colors } = useTheme();
 
   const settingsStore = useSettingsStore(state => state.personalization);
   const mutateProperty = useSettingsStore(state => state.mutateProperty);
+  const lastUsedAccount = useAccountStore(state => state.lastUsedAccount);
 
-  const disabledTabs = settingsStore?.disabledTabs || [];
+  const disabledTabsByAccount = settingsStore?.disabledTabsByAccount || {};
+  const disabledTabs = (lastUsedAccount
+    ? disabledTabsByAccount[lastUsedAccount]
+    : settingsStore?.disabledTabs) || [];
 
   const tabs = [
     {
@@ -35,24 +42,30 @@ const SettingsTabs = () => {
       icon: "grades",
       enabled: !disabledTabs.includes("grades"),
     },
-    {
-      id: "news",
-      name: t("Tab_News"),
-      icon: "newspaper",
-      enabled: !disabledTabs.includes("news"),
-    },
   ];
 
   const toggleTab = (tabId: string) => {
+    const nextDisabledTabs = disabledTabs.includes(tabId)
+      ? disabledTabs.filter(id => id !== tabId)
+      : [...disabledTabs, tabId];
+    const nextDisabledTabsByAccount = lastUsedAccount
+      ? {
+          ...disabledTabsByAccount,
+          [lastUsedAccount]: nextDisabledTabs,
+        }
+      : disabledTabsByAccount;
+
     if (disabledTabs.includes(tabId)) {
       mutateProperty("personalization", {
         ...settingsStore,
-        disabledTabs: disabledTabs.filter(id => id !== tabId),
+        disabledTabs: nextDisabledTabs,
+        disabledTabsByAccount: nextDisabledTabsByAccount,
       });
     } else {
       mutateProperty("personalization", {
         ...settingsStore,
-        disabledTabs: [...disabledTabs, tabId],
+        disabledTabs: nextDisabledTabs,
+        disabledTabsByAccount: nextDisabledTabsByAccount,
       });
     }
   };
@@ -61,7 +74,7 @@ const SettingsTabs = () => {
     <List
       contentInsetAdjustmentBehavior="always"
       contentContainerStyle={{ padding: 16 }}
-      style={{ flex: 1 }}
+      style={{ flex: 1, backgroundColor: colors.overground }}
     >
       {tabs.map(tab => (
         <List.Item key={tab.id}>
@@ -72,7 +85,7 @@ const SettingsTabs = () => {
           </List.Leading>
           <Typography variant="title">{tab.name}</Typography>
           <List.Trailing>
-            <Switch
+            <NativeSwitch
               value={tab.enabled}
               onValueChange={() => toggleTab(tab.id)}
             />

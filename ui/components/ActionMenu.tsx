@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import type { ComponentType } from "react";
 import type { MenuAction as NativeMenuAction, MenuComponentProps as NativeMenuComponentProps } from "@react-native-menu/menu";
 import {
   Modal,
@@ -12,25 +11,87 @@ import {
   LayoutRectangle,
   Dimensions,
 } from "react-native";
-import { useTheme } from "@react-navigation/native";
+import { useTheme } from "expo-router/react-navigation";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Stack from "@/ui/components/Stack";
 import { Papicons } from "@getpapillon/papicons";
-import { runsIOS26 } from "@/ui/utils/IsLiquidGlass";
-import { warn } from "@/utils/logger/logger";
 import Typography from "../new/Typography";
 import Reanimated, { FadeIn, FadeInRight, FadeOut, FadeOutLeft, LayoutAnimationConfig, LinearTransition, useAnimatedStyle, useSharedValue, withSpring, withTiming, ZoomOut, ZoomOutEasyUp } from "react-native-reanimated";
 import { PapillonAndroidMenuIn, PapillonAppearIn, PapillonAppearOut, PapillonSpringIn, PapillonZoomIn, PapillonZoomOut } from "../utils/Transition";
 import { ListTouchable } from "../new/List";
+import { Host, Menu as ExpoMenu, Button as ExpoButton, Toggle as ExpoToggle, RNHostView, Section as ExpoSection, Image as ExpoImage, Text as ExpoText, VStack as ExpoVStack, HStack as ExpoHStack, RNHostView as ExpoRNHostView, HStack } from "@expo/ui/swift-ui";
+import { disabled as disabledModifier, tint, foregroundStyle, font } from "@expo/ui/swift-ui/modifiers";
+import type { SFSymbol } from "sf-symbols-typescript";
 
-let NativeMenuView: ComponentType<Record<string, unknown>> | null = null;
-if (Platform.OS === "ios") {
-  try {
-    const mod = require("@react-native-menu/menu");
-    NativeMenuView = mod?.MenuView ?? null;
-  } catch (err: unknown) {
-    warn(`ActionMenu: impossible de charger @react-native-menu/menu MenuView: ${String(err)}`);
-  }
+function renderExpoActions(
+  actions: NativeMenuAction[],
+  onPress: (id: string) => void
+): React.ReactNode {
+  return actions.map((action, index) => {
+    const id = action.id ?? `action-${index}`;
+    if (action.attributes?.hidden) return null;
+
+    const destructive = Boolean(action.attributes?.destructive || (action as any).destructive);
+    const isDisabled = Boolean(action.attributes?.disabled || (action as any).disabled);
+    const imageColor = action.imageColor != null ? String(action.imageColor) : undefined;
+    const sfSymbol = action.image as SFSymbol | undefined;
+
+    if (action.subactions && action.subactions.length > 0) {
+      if (action.displayInline) {
+        return (
+          <ExpoSection key={id}>
+            {renderExpoActions(action.subactions, onPress)}
+          </ExpoSection>
+        );
+      }
+      return (
+        <ExpoMenu key={id} label="">
+          {renderExpoActions(action.subactions, onPress)}
+        </ExpoMenu>
+      );
+    }
+
+    const mods = [
+      ...(isDisabled ? [disabledModifier(true)] : []),
+    ];
+
+    if (action.state === "on" || action.state === "off") {
+      if (action.subtitle) {
+        return (
+          <ExpoToggle
+            key={id}
+            isOn={action.state === "on"}
+            onIsOnChange={() => onPress(id)}
+            modifiers={imageColor ? [...mods, tint(imageColor)] : mods}
+          >
+            <ExpoText>{action.title}</ExpoText>
+            <ExpoText>{action.subtitle}</ExpoText>
+          </ExpoToggle>
+        );
+      }
+      return (
+        <ExpoToggle
+          key={id}
+          label={action.title}
+          systemImage={sfSymbol}
+          isOn={action.state === "on"}
+          onIsOnChange={() => onPress(id)}
+          modifiers={imageColor ? [...mods, tint(imageColor)] : mods}
+        />
+      );
+    }
+
+    return (
+      <ExpoButton
+        key={id}
+        label={action.title}
+        systemImage={sfSymbol}
+        role={destructive ? "destructive" : "default"}
+        onPress={() => onPress(id)}
+        modifiers={imageColor ? [...mods, tint(imageColor)] : mods}
+      />
+    );
+  });
 }
 
 function MenuItem({
@@ -110,8 +171,8 @@ export default function ActionMenu({
   actions = [],
   children,
   onPressAction,
-  title,
-}: NativeMenuComponentProps) {
+  placement = "auto",
+}: NativeMenuComponentProps & { placement?: "auto" | "below" }) {
   const handleActionPress = onPressAction ?? (() => { });
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -154,16 +215,22 @@ export default function ActionMenu({
     };
   }, []);
 
-  // iOS
-  if (Platform.OS === "ios" && NativeMenuView) {
+  // iOS — native SwiftUI Menu via @expo/ui
+  if (Platform.OS === "ios") {
     return (
-      <NativeMenuView
-        onPressAction={handleActionPress}
-        actions={actions}
-        title={title}
-      >
-        {children}
-      </NativeMenuView>
+      <Host matchContents>
+        <ExpoMenu
+          label={
+            <RNHostView matchContents>
+              {children as React.ReactElement}
+            </RNHostView>
+          }
+        >
+          {renderExpoActions(actions, (id) => {
+            handleActionPress({ nativeEvent: { event: id } });
+          })}
+        </ExpoMenu>
+      </Host>
     );
   }
 
@@ -182,8 +249,8 @@ export default function ActionMenu({
         setModalVisible(true);
         return;
       }
-      trigger.measureInWindow((x, y, width, height) => {
-        setPosition({ x, y, width, height });
+      trigger.measure((x, y, width, height, pageX, pageY) => {
+        setPosition({ x: pageX ?? x, y: pageY ?? y, width, height });
         setModalVisible(true);
       });
     }, 0);
@@ -221,13 +288,15 @@ export default function ActionMenu({
   }
 
   function getMenuPosition() {
-    if (!position || !menuSize) {
-      return { alignSelf: "center" as const };
+    if (!position) {
+      return { position: "absolute" as const, top: 0, left: 0, opacity: 0 };
     }
 
     const screen = Dimensions.get("window");
     const MARGIN = 16;
     const SPACING = 8;
+    const width = menuSize?.width ?? menuWidth;
+    const height = menuSize?.height ?? estimatedMenuHeight;
 
     const safeLeft = insets.left + MARGIN;
     const safeRight = screen.width - insets.right - MARGIN;
@@ -236,14 +305,19 @@ export default function ActionMenu({
 
     const left = Math.min(
       Math.max(position.x, safeLeft),
-      safeRight - menuSize.width
+      safeRight - width
     );
 
-    const topIfBelow = position.y + position.height + SPACING;
-    const hasSpaceBelow = topIfBelow + menuSize.height <= safeBottom;
+    const topIfBelow = placement === "below"
+      ? Math.min(
+        Math.max(position.y, safeTop),
+        Math.max(safeTop, safeBottom - height)
+      )
+      : position.y + position.height + SPACING;
+    const hasSpaceBelow = placement === "below" || topIfBelow + height <= safeBottom;
     const top = hasSpaceBelow
       ? topIfBelow
-      : Math.max(safeTop, position.y - menuSize.height - SPACING);
+      : Math.max(safeTop, position.y - height - SPACING);
 
     return { position: "absolute" as const, top, left };
   }
@@ -259,7 +333,9 @@ export default function ActionMenu({
 
   const currentSubmenu = submenuStack[submenuStack.length - 1];
   const currentActions = currentSubmenu?.subactions ?? actions;
+  const menuWidth = Math.min(Dimensions.get("window").width * 0.75, 320);
   const estimatedMenuContentHeight = (currentActions.length + (currentSubmenu ? 1 : 0)) * 48;
+  const estimatedMenuHeight = estimatedMenuContentHeight + (currentSubmenu ? 52 : 0);
   const menuContentHeight = useSharedValue(estimatedMenuContentHeight);
   const hasMeasuredMenuContent = useRef(false);
 
@@ -317,13 +393,17 @@ export default function ActionMenu({
               style={[
                 styles.menu,
                 getMenuPosition(),
-                { backgroundColor: theme.colors.card, width: Math.min(Dimensions.get("window").width * 0.75, 320), transformOrigin: side === "left" ? "top left" : "top right" },
+                {
+                  backgroundColor: theme.colors.item,
+                  width: menuWidth,
+                  transformOrigin: side === "left" ? "top left" : "top right",
+                },
               ]}
             >
               <Reanimated.View
                 style={[
                   styles.menuContent,
-                  { backgroundColor: theme.colors.card },
+                  { backgroundColor: theme.colors.item },
                   menuContentAnimatedStyle,
                 ]}
               >
@@ -332,7 +412,7 @@ export default function ActionMenu({
                     style={[
                       styles.menuContentInner,
                       {
-                        backgroundColor: theme.colors.card,
+                        backgroundColor: theme.colors.item,
                       }
                     ]}
                     key={"menu:" + (currentSubmenu?.title ?? "root")}

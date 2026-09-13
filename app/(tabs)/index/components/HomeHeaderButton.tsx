@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { LiquidGlassView } from '@sbaiahmed1/react-native-blur';
 import { Papicons } from '@getpapillon/papicons';
 import Typography from '@/ui/new/Typography';
-import { useTheme } from '@react-navigation/native';
+import { useTheme } from "expo-router/react-navigation";
 import AnimatedPressable from '@/ui/components/AnimatedPressable';
 import Stack from '@/ui/components/Stack';
 import { TouchableNativeFeedback } from 'react-native';
@@ -14,6 +14,8 @@ export interface HomeHeaderButtonItem {
   color: string;
   description: string;
   onPress?: () => void;
+  route?: string;
+  params?: Record<string, string>;
 }
 
 interface HomeHeaderButtonProps {
@@ -42,8 +44,8 @@ const HomeHeaderButton: React.FC<HomeHeaderButtonProps> = ({ item }) => {
           gap: 12,
           paddingHorizontal: 10,
           paddingVertical: 13,
-          borderRadius: 24,
-          backgroundColor: colors.card,
+          borderRadius: 22,
+          backgroundColor: colors.item,
           elevation: 4,
           overflow: 'hidden',
         }}

@@ -23,8 +23,8 @@ import uuid from "@/utils/uuid/uuid";
 import { useTranslation } from "react-i18next";
 import OnboardingInput from "@/components/onboarding/OnboardingInput";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useTheme } from "@react-navigation/native";
-import { INSTANCES, loginWithCredentials } from "appscho";
+import { useTheme } from "expo-router/react-navigation";
+import { INSTANCES, loginWithCredentials } from "@blockshub/blockscho";
 
 const ANIMATION_DURATION = 100;
 

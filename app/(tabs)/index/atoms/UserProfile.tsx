@@ -1,14 +1,15 @@
 import { Papicons } from '@getpapillon/papicons';
 import { MenuView } from '@react-native-menu/menu';
-import { useTheme } from '@react-navigation/native';
+import { useTheme } from "expo-router/react-navigation";
 import { LiquidGlassView } from '@sbaiahmed1/react-native-blur';
-import { useRouter } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import React from 'react';
 import { Dimensions, Platform, StyleSheet } from 'react-native';
 import { Pressable } from 'react-native';
 
 import { initializeAccountManager } from '@/services/shared';
 import { useAccountStore } from '@/stores/account';
+import { useSettingsStore } from '@/stores/settings';
 import Avatar from '@/ui/components/Avatar';
 import Stack from '@/ui/components/Stack';
 import Typography from '@/ui/components/Typography';
@@ -40,24 +41,28 @@ const UserProfile = ({ subtitle, onPress }: { subtitle?: string, onPress?: () =>
         hAlign="center"
         gap={10}
       >
-        <Pressable onPress={() => router.push('/(modals)/profile')}>
-          <UserProfileItemContainer
-            glassType="clear"
-            isInteractive={true}
-            glassTintColor="transparent"
+            <UserProfileItemContainer
+              glassType="clear"
+              isInteractive={true}
+              glassTintColor="transparent"
             glassOpacity={0}
             style={{
               borderRadius: 300,
               zIndex: 999999,
             }}
           >
+        <Link asChild href="/(modals)/profile">
+        <Link.AppleZoom>
+          <Pressable>
             <Avatar
               size={40}
               initials={initials}
               imageUrl={profilePicture}
             />
-          </UserProfileItemContainer>
         </Pressable>
+        </Link.AppleZoom>
+        </Link>
+          </UserProfileItemContainer>
 
         <UserProfileItemContainer>
           <ActionMenu
@@ -72,30 +77,48 @@ const UserProfile = ({ subtitle, onPress }: { subtitle?: string, onPress?: () =>
                 return;
               }
 
+              if (nativeEvent.event === "workspaces" || !accounts.some(account => account.id === nativeEvent.event)) {
+                return;
+              }
+
               const store = useAccountStore.getState();
+              const settingsStore = useSettingsStore.getState();
+              const currentAccountId = store.lastUsedAccount;
+              const currentDisabledTabs = settingsStore.personalization.disabledTabs ?? [];
+              const nextDisabledTabsByAccount = {
+                ...(settingsStore.personalization.disabledTabsByAccount ?? {}),
+                ...(currentAccountId ? { [currentAccountId]: currentDisabledTabs } : {}),
+              };
+              const disabledTabsForAccount = nextDisabledTabsByAccount[nativeEvent.event] ?? [];
+              settingsStore.mutateProperty("personalization", {
+                disabledTabsByAccount: nextDisabledTabsByAccount,
+                disabledTabs: disabledTabsForAccount,
+              });
               store.setLastUsedAccount(nativeEvent.event);
-              await initializeAccountManager();
+              try {
+                await initializeAccountManager();
+              } catch (err) {
+                console.error("Failed to switch account:", err);
+              }
             }}
             actions={[
-              ...Platform.OS === "ios" ? [{
+              ...(Platform.OS === "ios" ? [{
                 id: 'workspaces',
                 title: '',
                 displayInline: true,
                 subactions: AccountsMenuItems,
-              }] : AccountsMenuItems,
+              }] : AccountsMenuItems),
               {
                 id: 'edit',
                 title: t('Home_Edit_Profile'),
                 image: 'person.crop.circle',
                 papicon: 'user',
-                imageColor: theme.colors.text,
               },
               {
                 id: 'add',
                 title: t('Home_Add_Profile'),
                 image: 'plus',
                 papicon: 'add',
-                imageColor: theme.colors.text,
               },
             ]}
           >

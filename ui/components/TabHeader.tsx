@@ -1,13 +1,15 @@
 
-import { useTheme } from '@react-navigation/native';
+import { useTheme } from "expo-router/react-navigation";
 import { ProgressiveBlurView } from '@sbaiahmed1/react-native-blur';
 import React, { useEffect } from 'react';
-import { Platform, View } from 'react-native';
+import { Platform, useWindowDimensions, View } from 'react-native';
 import Reanimated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { runsIOS26 } from '../utils/IsLiquidGlass';
 import { TabHeaderTitleProps } from './TabHeaderTitle';
+import AndroidBackButton from '@/utils/theme/AndroidBackButton';
+import useResizable from "../utils/Resizable";
 
 
 interface TabHeaderProps {
@@ -18,6 +20,7 @@ interface TabHeaderProps {
   shouldCollapseHeader?: boolean,
   modal?: boolean,
   backgroundColor?: string,
+  showAndroidBackButton?: boolean,
 };
 
 const TabHeader: React.FC<TabHeaderProps> = ({
@@ -28,6 +31,7 @@ const TabHeader: React.FC<TabHeaderProps> = ({
   shouldCollapseHeader,
   modal,
   backgroundColor,
+  showAndroidBackButton,
 }) => {
   const isModal = Platform.OS === 'ios' ? modal : false;
   const theme = useTheme();
@@ -35,6 +39,7 @@ const TabHeader: React.FC<TabHeaderProps> = ({
   const insets = useSafeAreaInsets();
   const [height, setHeight] = React.useState(0);
   const usedInsets = isModal ? 16 : insets.top;
+  const { isLarge } = useResizable();
 
   useEffect(() => {
     onHeightChanged(height + (Platform.OS === 'android' ? 6 : 0));
@@ -83,8 +88,8 @@ const TabHeader: React.FC<TabHeaderProps> = ({
           paddingBottom: 16,
           position: 'absolute',
           top: 0,
-          left: 0,
-          right: 0,
+          left: insets.left,
+          right: insets.right,
           zIndex: 1001,
           gap: 10,
           alignItems: 'center',
@@ -99,7 +104,7 @@ const TabHeader: React.FC<TabHeaderProps> = ({
           style={{
             flex: 1,
             flexDirection: 'row',
-            gap: 16,
+            gap: 8,
             paddingHorizontal: 16,
             paddingLeft: isModal ? 24 : 16,
             height: 40,
@@ -107,20 +112,52 @@ const TabHeader: React.FC<TabHeaderProps> = ({
             justifyContent: 'center',
           }}
         >
+          {showAndroidBackButton && Platform.OS === 'android' && (
+            <View style={{
+              marginTop: -2,
+            }}>
+              <AndroidBackButton />
+            </View>
+          )}
+
           {title}
 
           <View
             style={{
               flex: 1,
-              alignItems: 'flex-end',
-              justifyContent: 'center',
+              flexDirection: 'row',
+              gap: 8,
+              alignItems: 'center',
+              justifyContent: 'flex-end'
             }}
           >
+            {isLarge && (
+              <View
+                style={{
+                  maxWidth: 320,
+                  flex: 1,
+                  flexDirection: 'row',
+                  gap: 8,
+                  alignItems: 'center',
+                  justifyContent: 'flex-end',
+                }}
+              >
+                {bottom}
+              </View>
+            )}
+
             {trailing}
           </View>
         </View>
 
-        {bottom}
+        <View
+          style={{
+            width: '100%',
+          paddingHorizontal: 16,
+          }}
+        >
+          {!isLarge && bottom}
+        </View>
       </View>
     </>
   )
