@@ -20,11 +20,11 @@ import { useTheme } from "expo-router/react-navigation"
 import { router } from 'expo-router'
 import { t } from 'i18next'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { Platform } from 'react-native'
-import { RefreshControl } from 'react-native-gesture-handler'
-import Reanimated, { LayoutAnimationConfig, useAnimatedStyle } from 'react-native-reanimated'
+import { Platform, RefreshControl } from 'react-native'
+import Reanimated, { useAnimatedStyle } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import MainTabErrorBoundary from '@/ui/components/MainTabErrorBoundary'
+import SafeHorizontalView from "@/ui/components/SafeHorizontalView";
 
 const NewsView = () => {
   const theme = useTheme()
@@ -102,31 +102,28 @@ const NewsView = () => {
         }
       />
 
-      <LayoutAnimationConfig skipEntering>
-        <List
-          animated
-          style={{ flex: 1, backgroundColor: colors.overground }}
-          contentContainerStyle={{
-            paddingTop: headerHeight,
-            paddingBottom: Platform.OS === "android" ? 16 : bottomTabBarHeight + 16,
-            paddingHorizontal: 16,
-            gap: 9,
-            paddingLeft: insets.left + 16,
-          }}
-          refreshControl={
-            <RefreshControl
-              refreshing={isManuallyLoading}
-              onRefresh={() => {
-                setIsManuallyLoading(true)
-                void fetchNews()
-              }}
-              progressViewOffset={headerHeight}
-            />
-          }
-          ListFooterComponent={<Reanimated.View style={footerStyle} />}
-          scrollIndicatorInsets={{ top: headerHeight - insets.top }}
-          ListEmptyComponent={
-            <Dynamic animated key='empty-list:warn' entering={PapillonAppearIn} exiting={PapillonAppearOut}>
+      <List
+        style={{ flex: 1, backgroundColor: colors.overground }}
+        safeHorizontalPadding={16}
+        contentContainerStyle={{
+          paddingTop: headerHeight,
+          paddingBottom: Platform.OS === "android" ? 16 : bottomTabBarHeight + 16,
+        }}
+        refreshControl={
+          <RefreshControl
+            refreshing={isManuallyLoading}
+            onRefresh={() => {
+              setIsManuallyLoading(true)
+              void fetchNews()
+            }}
+            progressViewOffset={headerHeight}
+          />
+        }
+        ListFooterComponent={<Reanimated.View style={footerStyle} />}
+        scrollIndicatorInsets={{ top: headerHeight - insets.top }}
+        ListEmptyComponent={
+          <Dynamic animated key='empty-list:warn' entering={PapillonAppearIn} exiting={PapillonAppearOut}>
+            <SafeHorizontalView base={16} style={{ width: "100%" }}>
               <Stack
                 hAlign='center'
                 vAlign='center'
@@ -143,9 +140,12 @@ const NewsView = () => {
                   {searchText ? t('News_Search_NoResults_Description') : t('News_Empty_Description')}
                 </Typography>
               </Stack>
-            </Dynamic>
-          }
-        >
+            </SafeHorizontalView>
+          </Dynamic>
+        }
+      >
+        {filteredNews.length > 0 && (
+        <List.Section>
           {filteredNews.map((item) => {
             const profileColor = getProfileColorByName(item.author)
             const profileInitials = getInitials(item.author)
@@ -177,7 +177,7 @@ const NewsView = () => {
                   style={{ marginTop: 4 }}
                   hAlign='center'
                 >
-                  <Typography nowrap weight='medium' style={{ flex: 1 }} variant='caption' color='textSecondary'>
+                  <Typography numberOfLines={1} weight='medium' style={{ flex: 1 }} variant='caption' color='textSecondary'>
                     {item.author}
                   </Typography>
 
@@ -200,8 +200,9 @@ const NewsView = () => {
               </List.Item>
             )
           })}
-        </List>
-      </LayoutAnimationConfig>
+        </List.Section>
+        )}
+      </List>
     </>
   )
 }
